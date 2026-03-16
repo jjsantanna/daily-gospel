@@ -7,11 +7,16 @@ and sends it to Telegram. No OpenClaw agent/tools needed.
 Usage:
     python3 send_gospel.py
 
-Env vars (optional overrides):
-    OLLAMA_HOST      default: http://localhost:11434
-    OLLAMA_MODEL     default: gemma3:4b
-    TELEGRAM_TOKEN   default: read from script config
-    TELEGRAM_CHAT_ID default: read from script config
+Config (config.json in same directory — never commit this file):
+    {
+      "telegram_token": "your_bot_token",
+      "telegram_chat_id": "your_chat_id",
+      "ollama_host": "http://localhost:11434",  (optional)
+      "ollama_model": "gemma3:4b"               (optional)
+    }
+
+Env vars override config file:
+    OLLAMA_HOST, OLLAMA_MODEL, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
 """
 
 import json
@@ -21,10 +26,21 @@ import urllib.request
 import urllib.parse
 
 # ── Config ────────────────────────────────────────────────────────────────────
-OLLAMA_HOST    = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-OLLAMA_MODEL   = os.environ.get("OLLAMA_MODEL", "gemma3:4b")
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "REDACTED")
-TELEGRAM_CHAT  = os.environ.get("TELEGRAM_CHAT_ID", "8144230053")
+_config_path = os.path.join(os.path.dirname(__file__), "config.json")
+_config = {}
+if os.path.exists(_config_path):
+    with open(_config_path) as _f:
+        _config = json.load(_f)
+
+OLLAMA_HOST    = os.environ.get("OLLAMA_HOST",       _config.get("ollama_host",    "http://localhost:11434"))
+OLLAMA_MODEL   = os.environ.get("OLLAMA_MODEL",      _config.get("ollama_model",   "gemma3:4b"))
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN",    _config.get("telegram_token", ""))
+TELEGRAM_CHAT  = os.environ.get("TELEGRAM_CHAT_ID",  _config.get("telegram_chat_id", ""))
+
+if not TELEGRAM_TOKEN or not TELEGRAM_CHAT:
+    print("❌ Telegram token/chat_id not configured.\n"
+          "   Create config.json (see config.example.json) or set env vars.", file=sys.stderr)
+    sys.exit(1)
 
 
 # ── 1. Fetch gospel ───────────────────────────────────────────────────────────

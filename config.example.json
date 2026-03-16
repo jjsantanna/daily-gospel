@@ -1,0 +1,6 @@
+{
+  "telegram_token": "your_telegram_bot_token",
+  "telegram_chat_id": "your_telegram_chat_id",
+  "ollama_host": "http://localhost:11434",
+  "ollama_model": "gemma3:4b"
+}
