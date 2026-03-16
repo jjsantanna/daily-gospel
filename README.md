@@ -1,6 +1,13 @@
-# 🙏 Daily Gospel
-
-A daily gospel message delivered to Telegram every morning at 7:00 AM (Amsterdam time), powered by a local Ollama model — **zero API cost**.
+<div align="center">
+  <h1>
+    🙏 Daily Gospel → Telegram [OpenClaw]
+  </h1>
+  <img src="https://img.shields.io/badge/DoneBy-OpenClaw-red">
+  <img src="https://img.shields.io/badge/Python-Script-blue">
+  <img src="https://img.shields.io/badge/Ollama-gemma3:4b-green">
+  
+  A daily gospel message delivered to Telegram every morning at 7:00 AM (Amsterdam time), powered by a local Ollama model — **zero API cost**.
+</div>
 
 ## How It Works
 
