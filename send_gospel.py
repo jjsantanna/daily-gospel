@@ -138,6 +138,99 @@ def send_telegram(message):
         sys.exit(1)
 
 
+# ── 4. Generate TTS voice message ─────────────────────────────────────────────
+SHERPA_RUNTIME = os.environ.get(
+    "SHERPA_ONNX_RUNTIME_DIR",
+    "/home/jjsantanna/.openclaw/tools/sherpa-onnx-tts/runtime"
+)
+SHERPA_MODEL = os.environ.get(
+    "SHERPA_ONNX_MODEL_DIR",
+    "/home/jjsantanna/.openclaw/tools/sherpa-onnx-tts/models/vits-piper-en_US-lessac-high"
+)
+
+def build_tts_text(message):
+    """Strip emoji/URLs and fix Jair's name pronunciation for TTS."""
+    import re
+    # Remove URLs
+    text = re.sub(r'https?://\S+', '', message)
+    # Remove emoji (basic unicode ranges)
+    text = re.sub(r'[\U00010000-\U0010ffff\U0001F300-\U0001F9FF\u2600-\u27BF]', '', text)
+    # Replace "Jair" with phonetic spelling
+    text = re.sub(r'\bJair\b', 'Zhah-eer', text)
+    # Clean up extra whitespace/newlines
+    text = re.sub(r'\n+', '. ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+def generate_tts(message, output_path="/tmp/gospel-tts.wav"):
+    """Generate TTS audio using sherpa-onnx offline TTS."""
+    import subprocess
+    tts_bin = os.path.join(SHERPA_RUNTIME, "bin", "sherpa-onnx-offline-tts")
+    model_file = os.path.join(SHERPA_MODEL, "en_US-lessac-high.onnx")
+    tokens_file = os.path.join(SHERPA_MODEL, "tokens.txt")
+    data_dir = os.path.join(SHERPA_MODEL, "espeak-ng-data")
+
+    if not os.path.exists(tts_bin):
+        print(f"⚠️  sherpa-onnx-offline-tts not found at {tts_bin}, skipping TTS.")
+        return None
+
+    tts_text = build_tts_text(message)
+    print(f"🔊 Generating TTS audio ({len(tts_text)} chars)...")
+
+    result = subprocess.run(
+        [
+            tts_bin,
+            f"--vits-model={model_file}",
+            f"--vits-tokens={tokens_file}",
+            f"--vits-data-dir={data_dir}",
+            "--vits-length-scale=1.4",
+            f"--output-filename={output_path}",
+            tts_text,
+        ],
+        capture_output=True, text=True, timeout=120
+    )
+    if result.returncode == 0 and os.path.exists(output_path):
+        print(f"   → Saved to {output_path}")
+        return output_path
+    else:
+        print(f"❌ TTS failed: {result.stderr[-300:]}")
+        return None
+
+def send_telegram_voice(audio_path, caption=""):
+    """Send a voice message via Telegram bot API."""
+    import mimetypes
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendVoice"
+    boundary = "----FormBoundary7MA4YWxkTrZu0gW"
+    with open(audio_path, "rb") as f:
+        audio_data = f.read()
+    filename = os.path.basename(audio_path)
+    body = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="chat_id"\r\n\r\n'
+        f"{TELEGRAM_CHAT}\r\n"
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="caption"\r\n\r\n'
+        f"{caption}\r\n"
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="voice"; filename="{filename}"\r\n'
+        f"Content-Type: audio/wav\r\n\r\n"
+    ).encode() + audio_data + f"\r\n--{boundary}--\r\n".encode()
+
+    req = urllib.request.Request(
+        url, data=body,
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            result = json.loads(resp.read().decode())
+            if result.get("ok"):
+                print("✅ Voice message sent to Telegram.")
+            else:
+                print(f"❌ Telegram voice error: {result}")
+    except Exception as e:
+        print(f"❌ Failed to send voice message: {e}")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     print("📖 Fetching gospel from Universalis...")
@@ -162,3 +255,9 @@ if __name__ == "__main__":
 
     print("📲 Sending to Telegram...")
     send_telegram(message)
+
+    # Generate and send TTS voice message
+    audio_path = generate_tts(message, output_path="/tmp/gospel-tts.wav")
+    if audio_path:
+        print("📲 Sending voice message to Telegram...")
+        send_telegram_voice(audio_path, caption=f"Today's Gospel - {reference}")
